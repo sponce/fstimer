@@ -30,6 +30,7 @@ import fstimer.gui.projecttype
 import fstimer.gui.definefields
 import fstimer.gui.definefamilyreset
 import fstimer.gui.definedivisions
+import fstimer.gui.definerankings
 import fstimer.gui.root
 import fstimer.gui.about
 import fstimer.gui.importprereg
@@ -73,6 +74,11 @@ class PyTimer(object):
             self.numlaps = regdata['numlaps']
         except KeyError:
             self.numlaps = 1
+        try:
+            self.rankings = regdata['rankings']
+        except KeyError:
+            # old project, with no rankings, rankings is thus default one
+            self.rankings = [('times', True, 'entry[1]')]
         #Move on to the main window
         self.introwin.hide()
         self.rootwin = fstimer.gui.root.RootWin(self.path,
@@ -95,6 +101,7 @@ class PyTimer(object):
         self.divisions = regdata['divisions']
         self.projecttype = regdata['projecttype']
         self.numlaps = regdata['numlaps']
+        self.rankings = [('times', True, 'entry[1]')]
         #And load the new project window
         self.newprojectwin = fstimer.gui.newproject.NewProjectWin(self.set_projecttype,
                                                                   self.introwin)
@@ -145,30 +152,51 @@ class PyTimer(object):
     def define_family_reset(self, jnk_unused):
         '''Goes to family reset window'''
         self.definefieldswin.hide()
+        self.divisionswin = None
+        self.rankingswin = None
         self.familyresetwin = fstimer.gui.definefamilyreset.FamilyResetWin \
-          (self.fields, self.clear_for_fam, self.back_to_define_fields,
-           self.define_divisions, self.introwin)
+          (self.fields, self.clear_for_fam, self.back_to_define_fields, self.define_divisions, self.define_rankings, self.introwin)
 
     def back_to_define_fields(self, jnk_unused):
         '''Goes back to define fields window from the family reset one'''
         self.familyresetwin.hide()
         self.definefieldswin.show_all()
 
-    def define_divisions(self, jnk_unused, btnlist):
-        '''Defines default divisions and launched the division edition window'''
+    def set_fam_rest(self, btnlist):
         self.clear_for_fam = []
         for (field, btn) in zip(self.fields, btnlist):
             if btn.get_active():
                 self.clear_for_fam.append(field)
+        
+    def define_divisions(self, jnk_unused, btnlist):
+        '''Defines default divisions and launched the division edition window'''
+        if btnlist:
+            self.set_fam_rest(btnlist)
         self.familyresetwin.hide()
+        if self.rankingswin:
+            self.rankingswin.hide()
         self.divisionswin = fstimer.gui.definedivisions.DivisionsWin \
           (self.fields, self.fieldsdic, self.divisions, self.back_to_family_reset, self.store_new_project, self.introwin)
 
     def back_to_family_reset(self, jnk_unused):
         '''Goes back to family reset window, from the division edition one'''
-        self.divisionswin.hide()
+        if self.divisionswin:
+            self.divisionswin.hide()
+        if self.rankingswin:
+            self.rankingswin.hide()
         self.familyresetwin.show_all()
 
+    def define_rankings(self, jnk_unused, btnlist):
+        '''Defines default ranking and launch the ranking edition window'''
+        self.set_fam_rest(btnlist)
+        self.rankingswin = fstimer.gui.definerankings.RankingsWin \
+          (self.rankings, self.back_to_family_reset, self.define_divisions, self.introwin)
+        
+    def back_to_define_divisions(self, jnk_unused):
+        '''Goes back to define divisions window, from the ranking edition one'''
+        self.rankingswin.hide()
+        self.divisionswin.show_all()
+        
     def store_new_project(self, jnk_unused):
         '''Stores a new project to file and goes to root window'''
         os.system('mkdir '+self.path)
@@ -179,12 +207,14 @@ class PyTimer(object):
         regdata['fieldsdic'] = self.fieldsdic
         regdata['clear_for_fam'] = self.clear_for_fam
         regdata['divisions'] = self.divisions
+        regdata['rankings'] = self.rankings
         with open(os.path.join(self.path, self.path+'.reg'), 'wb') as fout:
             json.dump(regdata, fout)
+        self.divisionswin.hide()
+        self.rankingswin.hide()
         md = gtk.MessageDialog(self.divisionswin, gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, 'Project '+self.path+' successfully created!')
         md.run()
         md.destroy()
-        self.divisionswin.hide()
         self.introwin.hide()
         self.rootwin = fstimer.gui.root.RootWin(self.path,
                                                 self.show_about,
@@ -332,7 +362,7 @@ class PyTimer(object):
         self.timewin = fstimer.gui.timing.TimingWin(self.path, self.rootwin, timebtn, self.rawtimes, self.timing, self.print_times, self.projecttype, self.numlaps)
 
     def print_times(self, jnk_unused, use_csv):
-        '''print times to a file'''
+        '''print times to files'''
         # choose the right Printer Class
         if use_csv:
             if self.numlaps > 1:
@@ -352,38 +382,46 @@ class PyTimer(object):
             fields.append('Lap Times')
         fields.extend(['Name', 'Bib ID', 'Gender', 'Age'])
         fields.extend(list(other_fields))
-        # instantiate the printer
-        printer = printer_class(fields, [div[0] for div in self.divisions])
-        # first build all results into strings
-        scratchresults = printer.scratch_table_header()
-        divresults = {div[0]:'\n'+printer.cat_table_header(div[0])
-                      for div in self.divisions}
-        for (tag, time) in self.get_sorted_results():
-            scratchresults += printer.scratch_entry(tag, time, self.timing[tag])
-            mydivs = self.get_division(self.timing[tag])
-            for div in mydivs:
-                divresults[div] += printer.cat_entry(tag, div, time, self.timing[tag])
-        scratchresults += printer.scratch_table_footer()
-        for div in divresults:
-            divresults[div] += printer.cat_table_footer(div)
-        # now save to files
-        scratch_file = os.path.join(self.path,
-                                    '_'.join([self.path,
-                                              self.timewin.timestr,
-                                              'alltimes.' + printer.file_extension()]))
-        with open(scratch_file, 'w') as scratch_out:
-            scratch_out.write(printer.header())
-            scratch_out.write(scratchresults)
-            scratch_out.write(printer.footer())
-        div_file = os.path.join(self.path,
-                                '_'.join([self.path,
-                                          self.timewin.timestr,
-                                          'divtimes.' + printer.file_extension()]))
-        with open(div_file, 'w') as div_out:
-            div_out.write(printer.header())
-            for div in self.divisions:
-                div_out.write(divresults[div[0]])
-            div_out.write(printer.footer())
+        # loop through different types of ranking
+        for file_ext, do_div, ranking_code,  in self.rankings:
+            # instantiate the printer
+            printer = printer_class(fields, [div[0] for div in self.divisions])
+            # first build all results into strings
+            scratchresults = printer.scratch_table_header()
+            if do_div:
+                divresults = {div[0]:'\n'+printer.cat_table_header(div[0])
+                            for div in self.divisions}
+            code = compile(ranking_code, '', 'eval')
+            sort_method = lambda entry, self=self, code=code:eval(code)
+            for (tag, time) in self.get_sorted_results(sort_method):
+                scratchresults += printer.scratch_entry(tag, time, self.timing[tag])
+                if do_div:
+                    mydivs = self.get_division(self.timing[tag])
+                    for div in mydivs:
+                        divresults[div] += printer.cat_entry(tag, div, time, self.timing[tag])
+            scratchresults += printer.scratch_table_footer()
+            if do_div:
+                for div in divresults:
+                    divresults[div] += printer.cat_table_footer(div)
+            # now save to files
+            scratch_file = os.path.join(self.path,
+                                        '_'.join([self.path,
+                                                  self.timewin.timestr,
+                                                  'all' + file_ext + '.' + printer.file_extension()]))
+            with open(scratch_file, 'w') as scratch_out:
+                scratch_out.write(printer.header())
+                scratch_out.write(scratchresults)
+                scratch_out.write(printer.footer())
+            if do_div:
+                div_file = os.path.join(self.path,
+                                        '_'.join([self.path,
+                                                  self.timewin.timestr,
+                                                  'div' + file_ext + '.' + printer.file_extension()]))
+                with open(div_file, 'w') as div_out:
+                    div_out.write(printer.header())
+                    for div in self.divisions:
+                        div_out.write(divresults[div[0]])
+                    div_out.write(printer.footer())
         # display user dialog that all was successful
         md = gtk.MessageDialog(None, gtk.DIALOG_DESTROY_WITH_PARENT,
                                gtk.MESSAGE_INFO, gtk.BUTTONS_CLOSE,
@@ -429,7 +467,7 @@ class PyTimer(object):
             adj_times = list(self.rawtimes['times'])
         return adj_ids, adj_times
 
-    def get_sorted_results(self):
+    def get_sorted_results(self, sort_method):
         '''returns a sorted list of (id, result) items.
            The content of result depends on the race type'''
         # get raw times
@@ -441,7 +479,7 @@ class PyTimer(object):
             for tag, time in timeslist:
                 if tag and time and tag != self.passid:
                     try:
-                        new_timeslist.append((tag, str(fstimer.gui.timing.time_parse(time) - fstimer.gui.timing.time_parse(self.timing[tag]['Handicap']))[:-5]))
+                        new_timeslist.append((tag, fstimer.gui.timing.timedelta_format(fstimer.gui.timing.time_parse(time) - fstimer.gui.timing.time_parse(self.timing[tag]['Handicap']))))
                     except AttributeError:
                         #Either time or Handicap couldn't be converted to timedelta. It will be dropped.
                         pass
@@ -451,16 +489,18 @@ class PyTimer(object):
             #Drop times that are blank or have the passid
             timeslist = [(tag, time) for tag, time in timeslist if tag and time and tag != self.passid]
         # sort by time
-        timeslist = sorted(timeslist, key=lambda entry: entry[1])
+        timeslist = sorted(timeslist, key=sort_method)
         # single lap case
         if self.numlaps == 1:
+            # single lap case
+            timeslist = sorted(timeslist, key=sort_method)
             return timeslist
         else:
             # multi laps - groups times by tag
             # Each value of laptimesdic is a list, sorted in order from
             # fastest time (1st lap) to longest time (last lap).
             laptimesdic = defaultdict(list)
-            for (tag, time) in timeslist:
+            for (tag, time) in sorted(timeslist, key=lambda x:x[1]):
                 laptimesdic[tag].append(time)
             # compute the lap times.
             laptimesdic2 = defaultdict(list)
@@ -473,5 +513,5 @@ class PyTimer(object):
                 # And now the first lap
                 laptimesdic2[tag].append(laptimesdic[tag][0])
                 # And now the subsequent laps
-                laptimesdic2[tag].extend([str(fstimer.gui.timing.time_parse(laptimesdic[tag][ii+1]) - fstimer.gui.timing.time_parse(laptimesdic[tag][ii]))[:-5] for ii in range(len(laptimesdic[tag])-1)])
-            return sorted(laptimesdic2.items(), key=lambda entry: entry[1][0])
+                laptimesdic2[tag].extend([fstimer.gui.timing.timedelta_format(fstimer.gui.timing.time_parse(laptimesdic[tag][ii+1]) - fstimer.gui.timing.time_parse(laptimesdic[tag][ii])) for ii in range(len(laptimesdic[tag])-1)])
+            return sorted(laptimesdic2.items(), key=lambda entry:sort_method((entry[0], entry[1][0])))

@@ -74,9 +74,32 @@ fsTimer will not allow you to create two fields with the same name.<br><br>
 
 <img width="482" height="341" src="documentation_figs/fstimer_fig32.png"><br><br> <!--602x426-->
 
-When you have finished specifying the registration fields, you move on to controlling the behavior of the "Add family" button, as described in Section 2.6. You should select all of the fields that are <i>not</i> the same for all members of a family, probably First name, ID, Age, and Gender.  <br><br>
+When you have finished specifying the registration fields, you can move on to controlling the behavior of the "Add family" button, as described in Section 2.6. You should select all of the fields that are <i>not</i> the same for all members of a family, probably First name, ID, Age, and Gender.  <br><br>
 
 <img width="420" height="275" src="documentation_figs/fstimer_fig20.png"><br><br> <!--525x344-->
+
+At that step, you have the optionnal possibility to deal with Advanced Ranking, as described in Section 2.6. If standard ranking based on time suits your needs, just go on to the definition of Divisions.<br><br>
+
+<img width="572" height="340" src="documentation_figs/fstimer_fig42.png"><br><br> <!--715x425-->
+
+Advanced Ranking allows you to define multiple and non standard ways of ranking your runners. By default a single ranking is present, based on time and respecting divisions. This ranking is named "times" and is associated to the python expression "entry[1]"<br><br>
+
+Using the buttons on the right New, Delete, Up, Down, you can define extra rankings by giving the python expression that define them and specifying whether they should respect divisions or not.<br><br>
+
+The python expression can use 2 main variables :
+<dl>
+  <dt>entry</dt>
+  <dd>a tuple containing the runner id and its time as a timedelta object, hence the entry[1] value for the default timing</dd>
+  <dt>self</dt>
+  <dd>the timer object giving access to all the internals of fstimer. In particular, self.timing is the fstimer's timing dictionnary, containing for each user (given by its id) a dictionnary of the different fields defined in the fields windows. So self.timing[10]['Age'] gives the age of the user with id 10</dd>
+</dl>
+
+<img width="572" height="340" src="documentation_figs/fstimer_fig28.png"><br><br> <!--715x425-->
+
+As an example is worth many explanations, here is what you would do for defining a age/perf ranking where each extra year will give you a 15s bonus :<br><br>
+&nbsp;&nbsp;entry[1].total_seconds()-15*(int(self.timing[entry[0]]['Age']))<br><br>
+
+Note the cast into int as the fields dictionnary gives strings and the unchecking of the UseDivs column's checkbox specifying that this ranking won't be respecting the divisions.<br><br>
 
 Finally you must specify the divisionals. Again, "Up" and "Down" change the order in which the divisions will appear in the divisional results.<br><br>
 

@@ -632,7 +632,7 @@ class TimingWin(Gtk.Window):
            and then mark the time.'''
         txt = self.entrybox.get_text()
         timemarks = txt.count(self.timebtn)
-        txt = txt.replace(self.timebtn, '')
+        txt = txt.replace(self.timebtn, '').lstrip('0')
         # it is actually a result. (or a pass, which we treat as a result)
         # prepend to raw
         self.rawtimes['ids'].insert(0, txt)

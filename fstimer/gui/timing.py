@@ -235,12 +235,14 @@ class TimingWin(Gtk.Window):
         if self.numlaps > 1:
             s += ' (per lap)'
         s += ': ' + ' | '.join(str(n) for n in self.racers_in)
+        s += ', Times taken : %d ' % len(self.rawtimes['times'])
         self.racerslabel.set_markup(s)
 
     def check_for_newtime(self, jnk_unused):
         '''Handles entering of a new time'''
         if self.entrybox.get_text() == self.timebtn:
             self.new_blank_time()
+            self.update_racers_label()
 
     def scroll_times(self, jnk1_unused, jnk2_unused):
         '''handles scrolling of the time window'''

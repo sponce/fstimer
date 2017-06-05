@@ -73,9 +73,13 @@ class Printer(object):
            @type category: string
            @param category: name of the category handled by the table'''
         return ''
-    
+
+    def escape(self, word):
+        '''returns an escaped version of the value, if needed'''
+        return word
+
     def common_entry(self, row):
-        return self.row_delim.join(row)
+        return self.row_delim.join(map(self.escape, row))
 
     def scratch_entry(self, row, category=None):
         '''Returns the printout of the entry of a given runner

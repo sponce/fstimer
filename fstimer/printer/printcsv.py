@@ -42,6 +42,13 @@ class CSVPrinter(Printer):
            containing data from this printer'''
         return 'csv'
 
+    def escape(self, word):
+        '''returns an escaped version of the value'''
+        if type(word) == str and word.find(',') >= 0:
+            return '"' + word.replace('"', '\\"') + '"'
+        else:
+            return word
+
     def scratch_table_header(self):
         '''Returns the header of the printout for scratch results'''
         return 'Place,' + ','.join(self.fields) + '\n'
